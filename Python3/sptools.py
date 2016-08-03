@@ -9,141 +9,62 @@ import re
 def dB(val):
 	return 20*np.log10(np.abs(val))
 
-def getSnp(dataFile):
-	# local functions
-	def getNextLine(fileID):
-		while True:
-			# read line with \n
-			line = fileID.readline()
-			# check if it is EOF, ''
-			if line=='':
-				return -1
-			elif not(isComment(line)):
-				# return line without newline
-				return line[0:-1]
+#def generate
 
-	def isComment(line):
-		# remove newline and spaces
-		line = line[0:-1].replace(' ','')
-		if not(bool(line)):
-			return True
-		elif line[0]=='!':
-			return True
-		else:
-			return False
-
-
-	# open file for read
-	fileID = open(dataFile,'r')
-	# read file
-	# read header: # frequencyUnit networkFormat complexFormat R portZ (complex impedance terms not allowed)
-	nextLine = getNextLine(fileID) # header line ### error check
-	header = nextLine.split()
-	frequencyUnit = header[1].upper()
-	networkFormat = header[2].upper()
-	complexFormat = header[3].upper()
-	portZ = float(header[5])
-	#### check for errors in header line
-	# read data
-	# read all remaining lines
-	lines = []
-	nextLine = getNextLine(fileID)
-	while nextLine != -1:
-		lines.append(nextLine)
-		nextLine = getNextLine(fileID)
-	# close file
-	fileID.close()
-	# find how many lines per frequency point
-	numLinesPerFrequencyPoint = 1
-	numComplexValuesPerFrequencyPoint = 0
-	if len(lines[0].split())%2 == 0:
-		raise touchstoneFormatError # should be odd with freq value included with complex data
-	numComplexValuesPerFrequencyPoint += (len(lines[0].split()) - 1)/2
-	while len(lines[numLinesPerFrequencyPoint].split())%2 == 0:
-		numLinesPerFrequencyPoint += 1
-		numComplexValuesPerFrequencyPoint += len(lines[numLinesPerFrequencyPoint].split())/2
-	# check that there are an expected number of total lines, i.e. numLinesPerFrequencyPoint * number of frequency points
-	if len(lines)%numLinesPerFrequencyPoint != 0:
-		raise touchstoneFormatError # some extra junk at end
-	numFrequencyPoints = len(lines)//numLinesPerFrequencyPoint
-	numPorts = int(np.sqrt(numComplexValuesPerFrequencyPoint)) ### error check this
-	# read and create data matrices
-	frequency = np.zeros(numFrequencyPoints)
-	networkData1 = np.zeros((numPorts,numPorts,numFrequencyPoints))
-	networkData2 = np.zeros((numPorts,numPorts,numFrequencyPoints))
-	for nf in range(numFrequencyPoints):
-		frequency[nf] = float(lines[nf*numLinesPerFrequencyPoint].split()[0])
-		dataItems = lines[nf*numLinesPerFrequencyPoint].split()[1:]
-		for nlpfp in range(1,numLinesPerFrequencyPoint):
-			dataItems.extend(lines[nf*numLinesPerFrequencyPoint+nlpfp].split())
-		for n in range(numPorts): # row
-			for m in range(numPorts): # column
-				networkData1[n,m,nf] = float(dataItems[(n*numPorts+m)*2])
-				networkData2[n,m,nf] = float(dataItems[(n*numPorts+m)*2+1])
-	# scale frequency values to Hz
-	if frequencyUnit == 'HZ':
-		frequencyFactor = 1e0
-	elif frequencyUnit == 'KHZ':
-		frequencyFactor = 1e3
-	elif frequencyUnit == 'MHZ':
-		frequencyFactor = 1e6
-	elif frequencyUnit == 'GHZ':
-		frequencyFactor = 1e9
-	frequency *= frequencyFactor
-	# generate complex valued data from input data format
-	networkData = np.zeros((numPorts,numPorts,numFrequencyPoints),dtype=complex)
-	if complexFormat == 'RI':
-		networkData = networkData1 + networkData2*1j
-	elif complexFormat == 'MA':
-		networkData = networkData1 * np.exp(1j*2*np.pi/360.0*networkData2)
-	elif complexFormat == 'DB':
-		networkData = 10**(networkData1/20.0) * np.exp(1j*2*np.pi/360.0*networkData2)
-	# return data
-	return (networkData, frequency, numPorts, portZ)
-
-def genSMM(S):
-	if np.size(S,0)%2 != 0:
-		raise MixedModeOddNumberOfPorts
-	numPorts = np.size(S,0)//2 # mixed mode ports
-	# construct transformation matrix
-	if numPorts == 1: # add case for single mm port
-		M = np.array([[1,-1],[1,1]])/np.sqrt(2)
-	else:
-		M0 = np.array([[1,0,-1],[1,0,1]])/np.sqrt(2)
-		M = np.zeros((2*numPorts,2*numPorts))
-		for n in range(0,numPorts,2):
-			M[  2*n:2*n+2 ,   2*n:2*n+3] = M0
-			M[2*n+2:2*n+4 , 2*n+1:2*n+4] = M0
-	Mi = np.linalg.inv(M)
-	SMM = np.zeros_like(S)
-	for n in range(np.size(S,2)):
-		SMM[:,:,n] = np.dot( M, np.dot(S[:,:,n],Mi) ) # M*S*Mi
-	return SMM
-	
 class FrequencyDomainData:
 	def __init__(self):
 		pass
 	
 class SParameters(FrequencyDomainData):
-	def __init__(self,dataFile):
+	def __init__(self,data):
+		# data: touchstone file
+		# data: SParameter object
+		# data: dict with 'S', 'frequency' (,'portZ', 'label')
 		FrequencyDomainData.__init__(self)
-		self.__dataFile = dataFile
-		(self.__S, self.__frequency, self.__numPorts, self.__portZ)  = getSnp(self.__dataFile)
-		pattern0 = re.compile('^.*/')
-		pattern1 = re.compile('[.]s[0-9]*p')
-		self.__label  = pattern1.sub('',pattern0.sub('',dataFile))
+		if isinstance(data,SParameters):
+			self.__S = data.S
+			self.__frequency = data.frequency
+			self.__numPorts = data.numPorts
+			self.__portZ = data.portZ
+			self.__dataFile = data.dataFile
+			self.__label = data.label
+		else:
+			try: # data is touchstone file
+				print("Importing "+data)
+				self.__dataFile = data
+				self.__getSnp()
+				# generate default label from filename
+				pattern0 = re.compile('^.*/')
+				pattern1 = re.compile('[.]s[0-9]*p')
+				self.__label  = pattern1.sub('',pattern0.sub('',self.dataFile))
+			except: 
+				try: # data is dict
+					self.__S = data['S']
+					self.__frequency = data['frequency']
+					try:
+						self.__numPorts = data['numPorts']
+					except KeyError:
+						self.__numPorts = self.S.shape[1]
+					try:
+						self.__portZ = data['portZ']
+					except KeyError:
+						self.__portZ = 50.
+					try:
+						self.__dataFile = data['dataFile']
+					except KeyError:
+						self.__dataFile = ''
+					try:
+						self.__label = data['label']
+					except KeyError:
+						# generate default label from filename
+						pattern0 = re.compile('^.*/')
+						pattern1 = re.compile('[.]s[0-9]*p')
+						self.__label  = pattern1.sub('',pattern0.sub('',self.dataFile))
+				except:
+					pass ############## raise error
 			
-	# @classmethod
-	# def fromTouchstoneFile(cls, dataFile):
-		# self.__dataFile = dataFile
-		# (self.__S, self.__frequency, self.__numPorts, self.__portZ)  = getSnp(self.__dataFile)
-		# pattern0 = re.compile('^.*/')
-		# pattern1 = re.compile('[.]s[0-9]*p')
-		# self.__label  = pattern1.sub('',pattern0.sub('',dataFile))
-	
-	
 	def __str__(self):
-		return ("SParameter object\n" +
+		return ("### SParameter object ###\n" +
 				"Label:           " + self.label + "\n" +
 				"Datafile:        " + self.dataFile + "\n" +
 				"Number of ports: " + str(self.numPorts) + "\n" +
@@ -169,7 +90,7 @@ class SParameters(FrequencyDomainData):
 			col:	source port, index from 0
 			freq:	frequency index, index from 0
 		"""
-		return self.__S
+		return self.__S.copy()
 	
 	def getS(self,n0=1,m0=1):
 		"""getS(index) for index=(n,m) indexed from 1,
@@ -185,7 +106,7 @@ class SParameters(FrequencyDomainData):
 
 	@property
 	def frequency(self):
-		return self.__frequency
+		return self.__frequency.copy()
 		
 	@property
 	def numPorts(self):
@@ -222,17 +143,107 @@ class SParameters(FrequencyDomainData):
 				newS[n,m,:] = newMagnitude*np.exp(1j*newPhase)
 		self.__S = newS
 		self.__frequency = newFrequency
-		
+	
+	def __getSnp(self):
+		# local functions
+		def getNextLine(fileID):
+			while True:
+				# read line with \n
+				line = fileID.readline()
+				# check if it is EOF, ''
+				if line=='':
+					return -1
+				elif not(isComment(line)):
+					# return line without newline
+					return line[0:-1]
+
+		def isComment(line):
+			# remove newline and spaces
+			line = line[0:-1].replace(' ','')
+			if not(bool(line)):
+				return True
+			elif line[0]=='!':
+				return True
+			else:
+				return False
+
+
+		# open file for read
+		fileID = open(self.dataFile,'r')
+		# read file
+		# read header: # frequencyUnit networkFormat complexFormat R portZ (complex impedance terms not allowed)
+		nextLine = getNextLine(fileID) # header line ### error check
+		header = nextLine.split()
+		frequencyUnit = header[1].upper()
+		networkFormat = header[2].upper()
+		complexFormat = header[3].upper()
+		self.__portZ = float(header[5])
+		#### check for errors in header line
+		# read data
+		# read all remaining lines
+		lines = []
+		nextLine = getNextLine(fileID)
+		while nextLine != -1:
+			lines.append(nextLine)
+			nextLine = getNextLine(fileID)
+		# close file
+		fileID.close()
+		# find how many lines per frequency point
+		numLinesPerFrequencyPoint = 1
+		numComplexValuesPerFrequencyPoint = 0
+		if len(lines[0].split())%2 == 0:
+			raise touchstoneFormatError # should be odd with freq value included with complex data
+		numComplexValuesPerFrequencyPoint += (len(lines[0].split()) - 1)/2
+		while len(lines[numLinesPerFrequencyPoint].split())%2 == 0:
+			numLinesPerFrequencyPoint += 1
+			numComplexValuesPerFrequencyPoint += len(lines[numLinesPerFrequencyPoint].split())/2
+		# check that there are an expected number of total lines, i.e. numLinesPerFrequencyPoint * number of frequency points
+		if len(lines)%numLinesPerFrequencyPoint != 0:
+			raise touchstoneFormatError # some extra junk at end
+		numFrequencyPoints = len(lines)//numLinesPerFrequencyPoint
+		self.__numPorts = int(np.sqrt(numComplexValuesPerFrequencyPoint)) ### error check this
+		# read and create data matrices
+		self.__frequency = np.zeros(numFrequencyPoints)
+		networkData1 = np.zeros((self.numPorts,self.numPorts,numFrequencyPoints))
+		networkData2 = np.zeros((self.numPorts,self.numPorts,numFrequencyPoints))
+		for nf in range(numFrequencyPoints):
+			self.__frequency[nf] = float(lines[nf*numLinesPerFrequencyPoint].split()[0])
+			dataItems = lines[nf*numLinesPerFrequencyPoint].split()[1:]
+			for nlpfp in range(1,numLinesPerFrequencyPoint):
+				dataItems.extend(lines[nf*numLinesPerFrequencyPoint+nlpfp].split())
+			for n in range(self.numPorts): # row
+				for m in range(self.numPorts): # column
+					networkData1[n,m,nf] = float(dataItems[(n*self.numPorts+m)*2])
+					networkData2[n,m,nf] = float(dataItems[(n*self.numPorts+m)*2+1])
+		# scale frequency values to Hz
+		if frequencyUnit == 'HZ':
+			frequencyFactor = 1e0
+		elif frequencyUnit == 'KHZ':
+			frequencyFactor = 1e3
+		elif frequencyUnit == 'MHZ':
+			frequencyFactor = 1e6
+		elif frequencyUnit == 'GHZ':
+			frequencyFactor = 1e9
+		self.__frequency *= frequencyFactor
+		# generate complex valued data from input data format
+		self.__S = np.zeros((self.numPorts,self.numPorts,numFrequencyPoints),dtype=complex)
+		if complexFormat == 'RI':
+			self.__S = networkData1 + networkData2*1j
+		elif complexFormat == 'MA':
+			self.__S = networkData1 * np.exp(1j*2*np.pi/360.0*networkData2)
+		elif complexFormat == 'DB':
+			self.__S = 10**(networkData1/20.0) * np.exp(1j*2*np.pi/360.0*networkData2)
+	
 	def exportTouchstoneFile(self, dataFile='export', dataFormat='RI', numSignificantDigits=8):
 		pass
 
 class MixedModeSParameters(SParameters):		
 	def __init__(self,touchstoneFile):
 		SParameters.__init__(self,touchstoneFile)
-		self.__SMM = genSMM(self.S)
+		self.__genSMM()
 	
 	def __str__(self):
-		return ("MixedModeSParameter object\n" +
+		return ("### MixedModeSParameter object ###\n" +
 				"Label:           " + self.label + "\n" +
 				"Datafile:        " + self.dataFile + "\n" +
 				"Number of ports: " + str(self.numPorts) + "\n" +
@@ -244,7 +255,7 @@ class MixedModeSParameters(SParameters):
 	# setters and getters
 	@property
 	def SMM(self):
-		return self.__SMM
+		return self.__SMM.copy()
 	
 	def getSMM(self,n0=1,m0=1):
 		"""getS(index) for index=(n,m) indexed from 1,
@@ -326,6 +337,24 @@ class MixedModeSParameters(SParameters):
 	def copy(self):
 		return copy.deepcopy(self)
 
+	def __genSMM(self):
+		if np.size(self.S,0)%2 != 0:
+			raise MixedModeOddNumberOfPorts
+		numPorts = np.size(self.S,0)//2 # mixed mode ports
+		# construct transformation matrix
+		if numPorts == 1: # add case for single mm port
+			M = np.array([[1,-1],[1,1]])/np.sqrt(2)
+		else:
+			M0 = np.array([[1,0,-1],[1,0,1]])/np.sqrt(2)
+			M = np.zeros((2*numPorts,2*numPorts))
+			for n in range(0,numPorts,2):
+				M[  2*n:2*n+2 ,   2*n:2*n+3] = M0
+				M[2*n+2:2*n+4 , 2*n+1:2*n+4] = M0
+		Mi = np.linalg.inv(M)
+		self.__SMM = np.zeros_like(self.S)
+		for n in range(np.size(self.S,2)):
+			self.__SMM[:,:,n] = np.dot( M, np.dot(self.S[:,:,n],Mi) ) # M*S*Mi
+	
 	def reorderPorts(self,portOrder):
 		SParameters.reorderPorts(self,portOrder)
 		self.__SMM = genSMM(self.S)
