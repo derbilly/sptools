@@ -167,7 +167,6 @@ class SParameters(FrequencyDomainData):
 			else:
 				return False
 
-
 		# open file for read
 		fileID = open(self.dataFile,'r')
 		# read file
@@ -490,6 +489,7 @@ class FrequencyDomainPlot(DataPlot):
 	# title
 	# list of data items, line formats and legend labels
 	def __init__(self,dataFormat='dB',title=''):
+		DataPlot.__init__(self)
 		self.dataFormat = dataFormat
 		self.title = title
 		self._dataList = []
