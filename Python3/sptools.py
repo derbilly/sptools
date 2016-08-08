@@ -30,7 +30,6 @@ class SParameters(FrequencyDomainData):
 			self.__label = data.label
 		else:
 			try: # data is touchstone file
-				print("Importing "+data)
 				self.__dataFile = data
 				self.__getSnp()
 				# generate default label from filename
@@ -167,6 +166,7 @@ class SParameters(FrequencyDomainData):
 			else:
 				return False
 
+		print("Importing "+self.dataFile)
 		# open file for read
 		fileID = open(self.dataFile,'r')
 		# read file
@@ -233,8 +233,30 @@ class SParameters(FrequencyDomainData):
 		elif complexFormat == 'DB':
 			self.__S = 10**(networkData1/20.0) * np.exp(1j*2*np.pi/360.0*networkData2)
 	
-	def exportTouchstoneFile(self, dataFile='export', dataFormat='RI', numSignificantDigits=8):
-		pass
+	def export(self, dataFile='export', dataFormat='RI', numDigits=12, format='touchstone'):
+		# remove snp file extension and add a proper one
+		regexp0 = re.compile(r"\.s[0-9]*p$")
+		dataFile = regexp0.sub("",dataFile)
+		dataFile = "{0}.s{1}p".format(dataFile,self.numPorts)
+		print("Exporting " + dataFile)
+		data1 = np.real(self.S)
+		data2 = np.imag(self.S)
+		freq = self.frequency*1e-9
+		fid = open(dataFile,'w')
+		regexp1 = re.compile(r"\n") # add ! comment character to lines
+		fid.write("! Touchstone data exported from sptools\n! " +
+			regexp1.sub("\n! ",str(self)) )
+		fid.write("\n# GHZ S {0} R {1}".format(dataFormat,self.portZ))
+		for frequencyIndex in range(len(freq)):
+			fid.write("\n{0:0.5f}\t".format(freq[frequencyIndex]))
+			for n in range(self.numPorts):
+				for m in range(self.numPorts):
+					if (n*self.numPorts + m) != 0 and (n*self.numPorts + m) % 4 == 0:
+						fid.write("\n\t\t")
+					fid.write("{0:0.14g} {1:0.14g} ".format(data1[n,m,frequencyIndex],data2[n,m,frequencyIndex]))
+		fid.write("\n")
+		fid.close()
+
 
 class MixedModeSParameters(SParameters):		
 	def __init__(self,touchstoneFile):
