@@ -91,17 +91,42 @@ class SParameters(FrequencyDomainData):
 		"""
 		return self.__S.copy()
 	
-	def getS(self,n0=1,m0=1):
+	def getS(self,in1=(1,1),in2=None,frequency=None):
 		"""getS(index) for index=(n,m) indexed from 1,
 		returns Snm as a vector over the frequency index
+		Usage:
+			getS(n,m[,frequency])  indices as separate args with optional frequency
+			getS((n,m)[,frequency]) indices as a tuple with optional frequency
+			frequency can be specified as a single value or list of values
 		"""
-		if type(n0) == int:
-			n=n0-1
-			m=m0-1
-		elif len(n0)==2:
-			n = n0[0]-1
-			m = n0[1]-1
-		return self.S[n,m,:]
+		try:
+			n = in1[0]-1
+			m = in1[1]-1
+			if frequency == None:
+				frequency = in2
+		except TypeError:
+			n = in1 - 1
+			m = in2 - 1
+
+		data = self.S[n,m,:]
+		freq = self.frequency
+
+		if np.max(frequency)==None:
+			return data
+		else:
+			freqreq = np.array(frequency) # requested frequencies
+			if np.max(freqreq) <= np.max(freq) and np.min(freqreq) >= np.min(freq):
+				if freqreq in freq: # 
+					return data[freq==freqreq]
+				else: # interpolate the values
+					magnitude = np.abs(data)
+					phase = np.unwrap(np.angle(data))
+					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
+					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
+					newData = newMagnitude*np.exp(1j*newPhase)
+					return newData
+			else:
+				print("Frequency out of range")
 
 	@property
 	def frequency(self):
@@ -233,14 +258,29 @@ class SParameters(FrequencyDomainData):
 		elif complexFormat == 'DB':
 			self.__S = 10**(networkData1/20.0) * np.exp(1j*2*np.pi/360.0*networkData2)
 	
-	def export(self, dataFile='export', dataFormat='RI', numDigits=12, format='touchstone'):
+	def export(self, dataFile='export', dataFormat='RI', numDigits=12, format='touchstone', frequencyFormat='GHZ'):
 		# remove snp file extension and add a proper one
 		regexp0 = re.compile(r"\.s[0-9]*p$")
 		dataFile = regexp0.sub("",dataFile)
 		dataFile = "{0}.s{1}p".format(dataFile,self.numPorts)
+		
 		print("Exporting " + dataFile)
-		data1 = np.real(self.S)
-		data2 = np.imag(self.S)
+		
+		dataFormat = dataFormat.upper()
+		if dataFormat == 'RI':
+			data1 = np.real(self.S)
+			data2 = np.imag(self.S)
+		elif dataFormat == 'MA':
+			data1 = np.abs(self.S)
+			data2 = np.angle(self.S)
+		elif dataFormat == 'DB':
+			data1 = dB(self.S)
+			data2 = np.angle(self.S)
+		else:
+			dataFormat = 'RI'
+			data1 = np.real(self.S)
+			data2 = np.imag(self.S)
+			
 		freq = self.frequency*1e-9
 		fid = open(dataFile,'w')
 		regexp1 = re.compile(r"\n") # add ! comment character to lines
@@ -259,8 +299,8 @@ class SParameters(FrequencyDomainData):
 
 
 class MixedModeSParameters(SParameters):		
-	def __init__(self,touchstoneFile):
-		SParameters.__init__(self,touchstoneFile)
+	def __init__(self,data):
+		SParameters.__init__(self,data)
 		self.__genSMM()
 	
 	def __str__(self):
@@ -278,81 +318,206 @@ class MixedModeSParameters(SParameters):
 	def SMM(self):
 		return self.__SMM.copy()
 	
-	def getSMM(self,n0=1,m0=1):
-		"""getS(index) for index=(n,m) indexed from 1,
-		returns Snm as a vector over the frequency index
+	def getSMM(self,in1=(1,1),in2=None,frequency=None):
+		"""getSMM(index) for index=(n,m) indexed from 1,
+		returns SMMnm as a vector over the frequency index
+		Usage:
+			getSMM(n,m[,frequency])  indices as separate args with optional frequency
+			getSMM((n,m)[,frequency]) indices as a tuple with optional frequency
+			frequency can be specified as a single value or list of values
 		"""
-		if type(n0) == int:
-			n=n0-1
-			m=m0-1
-		elif len(n0)==2:
-			n = n0[0]-1
-			m = n0[1]-1
-		return self.SMM[n,m,:]
+		try:
+			n = in1[0]-1
+			m = in1[1]-1
+			if frequency == None:
+				frequency = in2
+		except TypeError:
+			n = in1 - 1
+			m = in2 - 1
+
+		data = self.SMM[n,m,:]
+		freq = self.frequency
+
+		if np.max(frequency)==None:
+			return data
+		else:
+			freqreq = np.array(frequency) # requested frequencies
+			if np.max(freqreq) <= np.max(freq) and np.min(freqreq) >= np.min(freq):
+				if freqreq in freq: # 
+					return data[freq==freqreq]
+				else: # interpolate the values
+					magnitude = np.abs(data)
+					phase = np.unwrap(np.angle(data))
+					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
+					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
+					newData = newMagnitude*np.exp(1j*newPhase)
+					return newData
+			else:
+				print("Frequency out of range")
 
 	@property
 	def SDD(self):
 		return self.SMM[0::2,0::2]
 	
-	def getSDD(self,n0=1,m0=1):
-		"""getS(index) for index=(n,m) indexed from 1,
-		returns Snm as a vector over the frequency index
+	def getSDD(self,in1=(1,1),in2=None,frequency=None):
+		"""getSDD(index) for index=(n,m) indexed from 1,
+		returns SDDnm as a vector over the frequency index
+		Usage:
+			getSDD(n,m[,frequency])  indices as separate args with optional frequency
+			getSDD((n,m)[,frequency]) indices as a tuple with optional frequency
+			frequency can be specified as a single value or list of values
 		"""
-		if type(n0) == int:
-			n=n0-1
-			m=m0-1
-		elif len(n0)==2:
-			n = n0[0]-1
-			m = n0[1]-1
-		return self.SDD[n,m,:]
+		try:
+			n = in1[0]-1
+			m = in1[1]-1
+			if frequency == None:
+				frequency = in2
+		except TypeError:
+			n = in1 - 1
+			m = in2 - 1
+
+		data = self.SDD[n,m,:]
+		freq = self.frequency
+
+		if np.max(frequency)==None:
+			return data
+		else:
+			freqreq = np.array(frequency) # requested frequencies
+			if np.max(freqreq) <= np.max(freq) and np.min(freqreq) >= np.min(freq):
+				if freqreq in freq: # 
+					return data[freq==freqreq]
+				else: # interpolate the values
+					magnitude = np.abs(data)
+					phase = np.unwrap(np.angle(data))
+					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
+					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
+					newData = newMagnitude*np.exp(1j*newPhase)
+					return newData
+			else:
+				print("Frequency out of range")
 
 	@property
 	def SDC(self):
 		return self.SMM[0::2,1::2]
 	
-	def getSDC(self,n0=1,m0=1):
-		"""getS(index) for index=(n,m) indexed from 1,
-		returns Snm as a vector over the frequency index
+	def getSDC(self,in1=(1,1),in2=None,frequency=None):
+		"""getSDC(index) for index=(n,m) indexed from 1,
+		returns SDCnm as a vector over the frequency index
+		Usage:
+			getSDC(n,m[,frequency])  indices as separate args with optional frequency
+			getSDC((n,m)[,frequency]) indices as a tuple with optional frequency
+			frequency can be specified as a single value or list of values
 		"""
-		if type(n0) == int:
-			n=n0-1
-			m=m0-1
-		elif len(n0)==2:
-			n = n0[0]-1
-			m = n0[1]-1
-		return self.SDC[n,m,:]
+		try:
+			n = in1[0]-1
+			m = in1[1]-1
+			if frequency == None:
+				frequency = in2
+		except TypeError:
+			n = in1 - 1
+			m = in2 - 1
+
+		data = self.SDC[n,m,:]
+		freq = self.frequency
+
+		if np.max(frequency)==None:
+			return data
+		else:
+			freqreq = np.array(frequency) # requested frequencies
+			if np.max(freqreq) <= np.max(freq) and np.min(freqreq) >= np.min(freq):
+				if freqreq in freq: # 
+					return data[freq==freqreq]
+				else: # interpolate the values
+					magnitude = np.abs(data)
+					phase = np.unwrap(np.angle(data))
+					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
+					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
+					newData = newMagnitude*np.exp(1j*newPhase)
+					return newData
+			else:
+				print("Frequency out of range")
 
 	@property
 	def SCD(self):
 		return self.SMM[1::2,0::2]
 	
-	def getSCD(self,n0=1,m0=1):
-		"""getS(index) for index=(n,m) indexed from 1,
-		returns Snm as a vector over the frequency index
+	def getSCD(self,in1=(1,1),in2=None,frequency=None):
+		"""getSCD(index) for index=(n,m) indexed from 1,
+		returns SCDnm as a vector over the frequency index
+		Usage:
+			getSCD(n,m[,frequency])  indices as separate args with optional frequency
+			getSCD((n,m)[,frequency]) indices as a tuple with optional frequency
+			frequency can be specified as a single value or list of values
 		"""
-		if type(n0) == int:
-			n=n0-1
-			m=m0-1
-		elif len(n0)==2:
-			n = n0[0]-1
-			m = n0[1]-1
-		return self.SCD[n,m,:]
+		try:
+			n = in1[0]-1
+			m = in1[1]-1
+			if frequency == None:
+				frequency = in2
+		except TypeError:
+			n = in1 - 1
+			m = in2 - 1
+
+		data = self.SCD[n,m,:]
+		freq = self.frequency
+
+		if np.max(frequency)==None:
+			return data
+		else:
+			freqreq = np.array(frequency) # requested frequencies
+			if np.max(freqreq) <= np.max(freq) and np.min(freqreq) >= np.min(freq):
+				if freqreq in freq: # 
+					return data[freq==freqreq]
+				else: # interpolate the values
+					magnitude = np.abs(data)
+					phase = np.unwrap(np.angle(data))
+					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
+					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
+					newData = newMagnitude*np.exp(1j*newPhase)
+					return newData
+			else:
+				print("Frequency out of range")
 
 	@property
 	def SCC(self):
 		return self.SMM[1::2,1::2]
 	
-	def getSCC(self,n0=1,m0=1):
-		"""getS(index) for index=(n,m) indexed from 1,
-		returns Snm as a vector over the frequency index
+	def getSCC(self,in1=(1,1),in2=None,frequency=None):
+		"""getSCC(index) for index=(n,m) indexed from 1,
+		returns SCCnm as a vector over the frequency index
+		Usage:
+			getSCC(n,m[,frequency])  indices as separate args with optional frequency
+			getSCC((n,m)[,frequency]) indices as a tuple with optional frequency
+			frequency can be specified as a single value or list of values
 		"""
-		if type(n0) == int:
-			n=n0-1
-			m=m0-1
-		elif len(n0)==2:
-			n = n0[0]-1
-			m = n0[1]-1
-		return self.SCC[n,m,:]
+		try:
+			n = in1[0]-1
+			m = in1[1]-1
+			if frequency == None:
+				frequency = in2
+		except TypeError:
+			n = in1 - 1
+			m = in2 - 1
+
+		data = self.SCC[n,m,:]
+		freq = self.frequency
+
+		if np.max(frequency)==None:
+			return data
+		else:
+			freqreq = np.array(frequency) # requested frequencies
+			if np.max(freqreq) <= np.max(freq) and np.min(freqreq) >= np.min(freq):
+				if freqreq in freq: # 
+					return data[freq==freqreq]
+				else: # interpolate the values
+					magnitude = np.abs(data)
+					phase = np.unwrap(np.angle(data))
+					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
+					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
+					newData = newMagnitude*np.exp(1j*newPhase)
+					return newData
+			else:
+				print("Frequency out of range")
 
 	# other functions
 	def copy(self):
