@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 import copy
 import re
+from scipy.optimize import curve_fit
 
 def dB(val):
 	return 20*np.log10(np.abs(val))
@@ -119,12 +120,7 @@ class SParameters(FrequencyDomainData):
 				if freqreq in freq: # 
 					return data[freq==freqreq]
 				else: # interpolate the values
-					magnitude = np.abs(data)
-					phase = np.unwrap(np.angle(data))
-					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
-					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
-					newData = newMagnitude*np.exp(1j*newPhase)
-					return newData
+					return fInterpolate(data,freq,freqreq)
 			else:
 				print("Frequency out of range")
 
@@ -157,14 +153,10 @@ class SParameters(FrequencyDomainData):
 		self.__numPorts = len(portOrder)
 	
 	def resampleFrequency(self,newFrequency):
-		newS = np.zeros((self.numPorts,self.numPorts,len(newFrequency)))
+		newS = np.zeros((self.numPorts,self.numPorts,len(newFrequency)),dtype=complex)
 		for n in range(self.numPorts):
 			for m in range(self.numPorts):
-				magnitude = np.abs(self.S[n,m,:])
-				phase = np.unwrap(np.angle(self.S[n,m,:]))
-				newMagnitude = interpolate.pchip_interpolate(self.frequency,magnitude,newFrequency)
-				newPhase = interpolate.pchip_interpolate(self.frequency,phase,newFrequency)
-				newS[n,m,:] = newMagnitude*np.exp(1j*newPhase)
+				newS[n,m,:] = fInterpolate(self.S[n,m,:],self.frequency,newFrequency)
 		self.__S = newS
 		self.__frequency = newFrequency
 	
@@ -346,12 +338,7 @@ class MixedModeSParameters(SParameters):
 				if freqreq in freq: # 
 					return data[freq==freqreq]
 				else: # interpolate the values
-					magnitude = np.abs(data)
-					phase = np.unwrap(np.angle(data))
-					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
-					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
-					newData = newMagnitude*np.exp(1j*newPhase)
-					return newData
+					return fInterpolate(data,freq,freqreq)
 			else:
 				print("Frequency out of range")
 
@@ -387,12 +374,7 @@ class MixedModeSParameters(SParameters):
 				if freqreq in freq: # 
 					return data[freq==freqreq]
 				else: # interpolate the values
-					magnitude = np.abs(data)
-					phase = np.unwrap(np.angle(data))
-					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
-					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
-					newData = newMagnitude*np.exp(1j*newPhase)
-					return newData
+					return fInterpolate(data,freq,freqreq)
 			else:
 				print("Frequency out of range")
 
@@ -428,12 +410,7 @@ class MixedModeSParameters(SParameters):
 				if freqreq in freq: # 
 					return data[freq==freqreq]
 				else: # interpolate the values
-					magnitude = np.abs(data)
-					phase = np.unwrap(np.angle(data))
-					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
-					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
-					newData = newMagnitude*np.exp(1j*newPhase)
-					return newData
+					return fInterpolate(data,freq,freqreq)
 			else:
 				print("Frequency out of range")
 
@@ -469,12 +446,7 @@ class MixedModeSParameters(SParameters):
 				if freqreq in freq: # 
 					return data[freq==freqreq]
 				else: # interpolate the values
-					magnitude = np.abs(data)
-					phase = np.unwrap(np.angle(data))
-					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
-					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
-					newData = newMagnitude*np.exp(1j*newPhase)
-					return newData
+					return fInterpolate(data,freq,freqreq)
 			else:
 				print("Frequency out of range")
 
@@ -510,12 +482,7 @@ class MixedModeSParameters(SParameters):
 				if freqreq in freq: # 
 					return data[freq==freqreq]
 				else: # interpolate the values
-					magnitude = np.abs(data)
-					phase = np.unwrap(np.angle(data))
-					newMagnitude = interpolate.pchip_interpolate(freq,magnitude,freqreq)
-					newPhase = interpolate.pchip_interpolate(freq,phase,freqreq)
-					newData = newMagnitude*np.exp(1j*newPhase)
-					return newData
+					return fInterpolate(data,freq,freqreq)
 			else:
 				print("Frequency out of range")
 
@@ -547,7 +514,7 @@ class MixedModeSParameters(SParameters):
 	
 	def resampleFrequency(self,newFrequency):
 		SParameters.resampleFrequency(self,newFrequency)
-		self.__SMM = genSMM(self.S)
+		self.__genSMM()
 
 class SpecLine(FrequencyDomainData):
 	def __init__(self,standard,specItem):
@@ -570,7 +537,8 @@ class SpecLine(FrequencyDomainData):
 		
 	# SpecLine generator methods dictionary
 	generatorMethod = dict()
-
+	
+	# 
 	# chip-to-module CAUI4
 	# IEEE 802.3bm
 	def gen_ctmCAUI4_IL(self):
@@ -753,3 +721,49 @@ class FrequencyDomainPlot(DataPlot):
 		plt.legend(self.labelList,fontsize='small')
 		plt.grid(True)
 		
+def calculateLoss(data):
+	(numPorts,_,numFrequencyPoints)=data.shape
+	loss = np.ones((numPorts,numFrequencyPoints))
+	for m in range(numPorts):
+		for n in range(numPorts):
+			loss[m,:] -= np.abs(data[n,m,:])**2
+	return loss
+
+def fInterpolate(data,f,fnew):
+	magnitude = np.abs(data)
+	phase = np.unwrap(np.angle(data))
+	newMagnitude = interpolate.pchip_interpolate(f,magnitude,fnew)
+	newPhase = interpolate.pchip_interpolate(f,phase,fnew)
+	newData = newMagnitude*np.exp(1j*newPhase)
+	return newData
+
+	
+class BackplaneEthernetChannel:
+	# Annex 69B
+	
+	# constants
+	f_min = 0.05
+	f_max = 15.00
+	b_1 = 2.0e-5
+	b_2 = 1.1e-10
+	b_3 = 3.2e-20
+	b_4 = -1.2e-30
+	def __init__(self,thruResponse,frequency,standard='10GBASE-KR'):
+		self.__thruResponse = {'data':thruResponse,'frequency':frequency}
+		self.__NEXT = []
+		self.__FEXT = []
+		if standard=='10GBASE-KR':
+			self.f_1 = 1.0
+			self.f_2 = 6.0
+			self.f_a = 0.1
+			self.f_b = 5.15625
+			
+		
+	def addNEXT(self,next,frequency):
+		self.__NEXT.append({'data':next,'frequency':frequency})
+	
+	def addFEXT(self,fext,frequency):
+		self.__FEXT.append({'data':fext,'frequency':frequency})
+	
+	def fittedAttenuation(self):
+		pass
