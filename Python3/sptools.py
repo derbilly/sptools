@@ -538,7 +538,75 @@ class SpecLine(FrequencyDomainData):
 	# SpecLine generator methods dictionary
 	generatorMethod = dict()
 	
-	# 
+	# 10GBASE-KR
+	# IEEE 802.3 Annex69B
+	
+	def gen_10GKR_Amax(self):
+		b1 = 2.0e-5
+		b2 = 1.1e-10
+		b3 = 3.2e-20
+		b4 = -1.2e-30
+		f1 = 1.0e9
+		f2 = 6.0e9
+		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
+		dBspecLine = -20*np.log10(np.exp(1))*(b1*np.sqrt(self.frequency) + b2*self.frequency +
+			b3*self.frequency**2 + b4*self.frequency**3)
+		self.specLine = 10**(dBspecLine/20)
+	
+	def gen_10GKR_ILmax(self):
+		b1 = 2.0e-5
+		b2 = 1.1e-10
+		b3 = 3.2e-20
+		b4 = -1.2e-30
+		f2 = 6.0e9
+		fmin = 0.05e9
+		fmax = 15.0e9
+		self.frequency = np.linspace(fmin, fmax, int((fmax-fmin)/10e6)+1)
+		dBspecLine = -20*np.log10(np.exp(1))*(b1*np.sqrt(self.frequency) + b2*self.frequency +
+			b3*self.frequency**2 + b4*self.frequency**3) - 0.8 - 2.0e-10*self.frequency
+		dBspecLine[self.frequency>f2] = dBspecLine[self.frequency>f2] - 1e-8*(self.frequency[self.frequency>f2]-f2)
+		self.specLine = 10**(dBspecLine/20)
+	
+	def gen_10GKR_ILDmin(self):
+		f1 = 1.0e9
+		f2 = 6.0e9
+		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
+		dBspecLine = -(1.0 + 0.5e-9*self.frequency)
+		self.specLine = 10**(dBspecLine/20)
+
+	def gen_10GKR_ILDmax(self):
+		f1 = 1.0e9
+		f2 = 6.0e9
+		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
+		dBspecLine = (1.0 + 0.5e-9*self.frequency)
+		self.specLine = 10**(dBspecLine/20)
+
+	def gen_10GKR_RLmin(self):
+		f2 = 10312.5e6
+		self.frequency = np.linspace(50e6, f2, int((f2-50e6)/12.5e6)+1)
+		dBspecLine = -(12.0 - 6.75*np.log10(self.frequency/275e6))
+		dBspecLine[self.frequency<275.0e6] = -12
+		dBspecLine[self.frequency>3000.0e6] = -5
+		self.specLine = 10**(dBspecLine/20)
+
+	def gen_10GKR_ICRmin(self):
+		fa = 0.1e9
+		fb = 5.15625e9
+		self.frequency = np.linspace(fa, fb, 501)
+		dBspecLine = 23.3 -  18.7*np.log10(self.frequency/5.0e9)
+		self.specLine = 10**(dBspecLine/20)
+
+
+	generatorMethod['10GBASE-KR'] = {
+	'Amax':gen_10GKR_Amax, # 69B.4.2 Fitted attenuation
+	'ILmax':gen_10GKR_ILmax, # 69B.4.3 Insertion loss
+	'ILDmin':gen_10GKR_ILDmin, # 69B.4.4 Insertion loss deviation
+	'ILDmax':gen_10GKR_ILDmax, # 69B.4.4 Insertion loss deviation
+	'RLmin':gen_10GKR_RLmin, # 69B.4.5 Return loss
+	'ICRmin':gen_10GKR_ICRmin} # 69B.4.6 Crosstalk
+
+	
+	
 	# chip-to-module CAUI4
 	# IEEE 802.3bm
 	def gen_ctmCAUI4_IL(self):
@@ -621,14 +689,14 @@ class SpecLine(FrequencyDomainData):
 		self.specLine = 10**(dBspecLine/20)
 	
 	generatorMethod['100GBASE-CR4'] = {
-		'IL_tfref':gen_100GCR4_IL_tfref,
-		'IL_catf':gen_100GCR4_IL_catf,
-		'IL_MTFmax':gen_100GCR4_IL_MTFmax,
-		'IL_MTFmin':gen_100GCR4_IL_MTFmin,
-		'RLd_MTF':gen_100GCR4_RLd_MTF,
-		'ILdc_MTF':gen_100GCR4_ILdc_MTF,
-		'RLc_MTF':gen_100GCR4_RLc_MTF,
-		'RLdc_MTF':gen_100GCR4_RLdc_MTF}
+		'IL_tfref':gen_100GCR4_IL_tfref, # 92.11.1.2 Test fixture insertion loss
+		'IL_catf':gen_100GCR4_IL_catf, # 92.11.2 Cable assembly test fixture
+		'IL_MTFmax':gen_100GCR4_IL_MTFmax, # 92.11.3 Mated test fixtures
+		'IL_MTFmin':gen_100GCR4_IL_MTFmin, # 92.11.3 Mated test fixtures
+		'RLd_MTF':gen_100GCR4_RLd_MTF, # 92.11.3 Mated test fixtures
+		'ILdc_MTF':gen_100GCR4_ILdc_MTF, # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
+		'RLc_MTF':gen_100GCR4_RLc_MTF, # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
+		'RLdc_MTF':gen_100GCR4_RLdc_MTF} # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
 
 class DataPlot:
 	def xlim(self,low=None,high=None):
@@ -748,8 +816,9 @@ class BackplaneEthernetChannel:
 	b_2 = 1.1e-10
 	b_3 = 3.2e-20
 	b_4 = -1.2e-30
-	def __init__(self,thruResponse,frequency,standard='10GBASE-KR'):
-		self.__thruResponse = {'data':thruResponse,'frequency':frequency}
+	def __init__(self,standard='10GBASE-KR'):
+		self.__thruResponse = {}
+		self.__returnLoss = []
 		self.__NEXT = []
 		self.__FEXT = []
 		if standard=='10GBASE-KR':
@@ -758,12 +827,37 @@ class BackplaneEthernetChannel:
 			self.f_a = 0.1
 			self.f_b = 5.15625
 			
-		
+	def addThru(self,data,frequency):	# with 2 port S params or thru, add RL if available
+		if len(data.shape) == 1:
+			self.__thruResponse = {'data':data,'frequency':frequency}
+		elif len(data.shape) == 3:
+			self.__thruResponse = {'data':data[2,1,:],'frequency':frequency}
+			self.__returnLoss.append({'data':data[1,1,:],'frequency':frequency})
+			self.__returnLoss.append({'data':data[2,2,:],'frequency':frequency})
+	
+	def addRL(self,data,frequency):	# add RL
+		self.__returnLoss.append({'data':data,'frequency':frequency})
+	
 	def addNEXT(self,next,frequency):
 		self.__NEXT.append({'data':next,'frequency':frequency})
 	
 	def addFEXT(self,fext,frequency):
 		self.__FEXT.append({'data':fext,'frequency':frequency})
 	
-	def fittedAttenuation(self):
+	def calcFittedAttenuation(self):
+		pass
+		
+	def calcInsertionLossDeviation(self):
+		pass
+	
+	# fitted Attenuation
+	# IL
+	# RL
+	# ILD
+	# PSNEXT
+	# PSFEXT
+	# PSXT
+	# ICR
+	
+	def evaluate(self):
 		pass
