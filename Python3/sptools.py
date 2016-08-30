@@ -10,8 +10,6 @@ from scipy.optimize import curve_fit
 def dB(val):
 	return 20*np.log10(np.abs(val))
 
-#def generate
-
 class FrequencyDomainData:
 	def __init__(self):
 		pass
@@ -61,7 +59,8 @@ class SParameters(FrequencyDomainData):
 						pattern1 = re.compile('[.]s[0-9]*p')
 						self.__label  = pattern1.sub('',pattern0.sub('',self.dataFile))
 				except:
-					pass ############## raise error
+					print("No such file or data: {0}".format(data))
+					raise 
 			
 	def __str__(self):
 		return ("### SParameter object ###\n" +
@@ -289,7 +288,6 @@ class SParameters(FrequencyDomainData):
 		fid.write("\n")
 		fid.close()
 
-
 class MixedModeSParameters(SParameters):		
 	def __init__(self,data):
 		SParameters.__init__(self,data)
@@ -510,7 +508,7 @@ class MixedModeSParameters(SParameters):
 	
 	def reorderPorts(self,portOrder):
 		SParameters.reorderPorts(self,portOrder)
-		self.__SMM = genSMM(self.S)
+		self.__genSMM()
 	
 	def resampleFrequency(self,newFrequency):
 		SParameters.resampleFrequency(self,newFrequency)
@@ -552,6 +550,7 @@ class SpecLine(FrequencyDomainData):
 		dBspecLine = -20*np.log10(np.exp(1))*(b1*np.sqrt(self.frequency) + b2*self.frequency +
 			b3*self.frequency**2 + b4*self.frequency**3)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 	
 	def gen_10GKR_ILmax(self):
 		b1 = 2.0e-5
@@ -566,6 +565,7 @@ class SpecLine(FrequencyDomainData):
 			b3*self.frequency**2 + b4*self.frequency**3) - 0.8 - 2.0e-10*self.frequency
 		dBspecLine[self.frequency>f2] = dBspecLine[self.frequency>f2] - 1e-8*(self.frequency[self.frequency>f2]-f2)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 	
 	def gen_10GKR_ILDmin(self):
 		f1 = 1.0e9
@@ -573,6 +573,7 @@ class SpecLine(FrequencyDomainData):
 		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
 		dBspecLine = -(1.0 + 0.5e-9*self.frequency)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 
 	def gen_10GKR_ILDmax(self):
 		f1 = 1.0e9
@@ -580,6 +581,7 @@ class SpecLine(FrequencyDomainData):
 		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
 		dBspecLine = (1.0 + 0.5e-9*self.frequency)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 
 	def gen_10GKR_RLmin(self):
 		f2 = 10312.5e6
@@ -588,6 +590,7 @@ class SpecLine(FrequencyDomainData):
 		dBspecLine[self.frequency<275.0e6] = -12
 		dBspecLine[self.frequency>3000.0e6] = -5
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 
 	def gen_10GKR_ICRmin(self):
 		fa = 0.1e9
@@ -595,6 +598,7 @@ class SpecLine(FrequencyDomainData):
 		self.frequency = np.linspace(fa, fb, 501)
 		dBspecLine = 23.3 -  18.7*np.log10(self.frequency/5.0e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 
 
 	generatorMethod['10GBASE-KR'] = {
@@ -616,6 +620,7 @@ class SpecLine(FrequencyDomainData):
 			0.537*np.sqrt(self.frequency[self.frequency<14e9]/1e9) + 
 			0.566*self.frequency[self.frequency<14e9]/1e9))
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 	
 	def gen_ctmCAUI4_RLd(self):
 		self.frequency = np.linspace(10e6,19e9,int(19e9/10e6))
@@ -623,6 +628,7 @@ class SpecLine(FrequencyDomainData):
 		dBspecLine[self.frequency<8e9] = -(9.5 - 
 			0.37*self.frequency[self.frequency<8e9]/1e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 	
 	def gen_ctmCAUI4_RLdc(self):
 		self.frequency = np.linspace(10e6,19e9,int(19e9/10e6))
@@ -630,6 +636,7 @@ class SpecLine(FrequencyDomainData):
 		dBspecLine[self.frequency<12.89e9] = -(22 - 
 			20*self.frequency[self.frequency<12.89e9]/1e9/25.78)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 	
 	generatorMethod['chip-to-module CAUI4'] = {
 		'IL':gen_ctmCAUI4_IL,
@@ -643,11 +650,13 @@ class SpecLine(FrequencyDomainData):
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
 		dBspecLine = -(-0.00144 + 0.13824*np.sqrt(self.frequency/1e9) + 0.06624*self.frequency/1e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 	
 	def gen_100GCR4_IL_catf(self): # 92.11.2 Cable assembly test fixture
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
 		dBspecLine = -(-0.00125 + 0.12*np.sqrt(self.frequency/1e9) + 0.0575*self.frequency/1e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 	
 	def gen_100GCR4_IL_MTFmax(self): # 92.11.3 Mated test fixtures
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
@@ -656,11 +665,13 @@ class SpecLine(FrequencyDomainData):
 			0.475*np.sqrt(self.frequency[self.frequency<14e9]/1e9) + 
 			0.221*self.frequency[self.frequency<14e9]/1e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 	
 	def gen_100GCR4_IL_MTFmin(self): # 92.11.3 Mated test fixtures
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
 		dBspecLine = -(0.0656*np.sqrt(self.frequency/1e9) + 0.164*self.frequency/1e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 	
 	def gen_100GCR4_RLd_MTF(self): # 92.11.3 Mated test fixtures
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
@@ -668,18 +679,21 @@ class SpecLine(FrequencyDomainData):
 		dBspecLine[self.frequency<4e9] = -(20 -
 			1*self.frequency[self.frequency<4e9]/1e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 	
 	def gen_100GCR4_ILdc_MTF(self): # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
 		dBspecLine = -(30 - 29/22*self.frequency/1e9)
 		dBspecLine[self.frequency>=16.5e9] = -8.25
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'min'
 	
 	def gen_100GCR4_RLc_MTF(self): # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
 		dBspecLine = -(12 - 9*self.frequency/1e9)
 		dBspecLine[self.frequency>=1e9] = -3
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 
 	def gen_100GCR4_RLdc_MTF(self): # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
 		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
@@ -687,6 +701,7 @@ class SpecLine(FrequencyDomainData):
 		dBspecLine[self.frequency<12.89e9] = -(30 -
 			30/25.78*self.frequency[self.frequency<12.89e9]/1e9)
 		self.specLine = 10**(dBspecLine/20)
+		self.limitType = 'max'
 	
 	generatorMethod['100GBASE-CR4'] = {
 		'IL_tfref':gen_100GCR4_IL_tfref, # 92.11.1.2 Test fixture insertion loss
@@ -699,6 +714,9 @@ class SpecLine(FrequencyDomainData):
 		'RLdc_MTF':gen_100GCR4_RLdc_MTF} # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
 
 class DataPlot:
+	def __init__(self):
+		pass
+		
 	def xlim(self,low=None,high=None):
 		self._xlimits = (low,high)
 	
@@ -720,7 +738,7 @@ class FrequencyDomainPlot(DataPlot):
 		self.labelList = []
 		self.plotSpecList = []
 		
-	def addItem(self,data,arg2='S',arg3=(1,1)):
+	def addItem(self,data,arg2='S',arg3=(1,1),lineStyle=''):
 		# (dataObj, dataItem, index)
 		# (data, frequency, label)
 		# interpret input arguments
@@ -729,17 +747,19 @@ class FrequencyDomainPlot(DataPlot):
 				self._dataList.append(eval("data."+arg2)[arg3[0]-1,arg3[1]-1,:])
 				self._frequencyList.append(data.frequency)
 				self.labelList.append(data.label + " " + arg2 + str(arg3))
-				self.plotSpecList.append('')
+				self.plotSpecList.append(lineStyle)
 			elif isinstance(data,SpecLine):
 				self._dataList.append(data.specLine)
 				self._frequencyList.append(data.frequency)
 				self.labelList.append(data.standard + " " + data.specItem)
-				self.plotSpecList.append('--')
+				if lineStyle == '':
+					lineStyle = '--'
+				self.plotSpecList.append(lineStyle)
 		elif type(data) == np.ndarray:
 			self._dataList.append(data)
 			self._frequencyList.append(arg2)
 			self.labelList.append(arg3)
-			self.plotSpecList.append('')
+			self.plotSpecList.append(lineStyle)
 
 	def generatePlot(self):
 		plt.figure()
@@ -786,16 +806,18 @@ class FrequencyDomainPlot(DataPlot):
 		plt.xlabel('GHz')
 		plt.ylabel(self.dataFormat)
 		plt.title(self.title)
-		plt.legend(self.labelList,fontsize='small')
+		plt.legend(self.labelList,fontsize='small',loc=4)
 		plt.grid(True)
 		
 def calculateLoss(data):
 	(numPorts,_,numFrequencyPoints)=data.shape
 	loss = np.ones((numPorts,numFrequencyPoints))
+	power = np.zeros((numPorts,numFrequencyPoints))
 	for m in range(numPorts):
 		for n in range(numPorts):
 			loss[m,:] -= np.abs(data[n,m,:])**2
-	return loss
+			power[m,:] += np.abs(data[n,m,:])**2
+	return np.sqrt(power)
 
 def fInterpolate(data,f,fnew):
 	magnitude = np.abs(data)
@@ -805,51 +827,81 @@ def fInterpolate(data,f,fnew):
 	newData = newMagnitude*np.exp(1j*newPhase)
 	return newData
 
-	
 class BackplaneEthernetChannel:
 	# Annex 69B
 	
 	# constants
-	f_min = 0.05
-	f_max = 15.00
-	b_1 = 2.0e-5
-	b_2 = 1.1e-10
-	b_3 = 3.2e-20
-	b_4 = -1.2e-30
+	f_min = 0.05e9
+	f_max = 15.00e9
 	def __init__(self,standard='10GBASE-KR'):
-		self.__thruResponse = {}
+		self.__thru = {}
 		self.__returnLoss = []
 		self.__NEXT = []
 		self.__FEXT = []
 		if standard=='10GBASE-KR':
-			self.f_1 = 1.0
-			self.f_2 = 6.0
-			self.f_a = 0.1
-			self.f_b = 5.15625
-			
-	def addThru(self,data,frequency):	# with 2 port S params or thru, add RL if available
+			self.f_1 = 1.0e9
+			self.f_2 = 6.0e9
+			self.f_a = 0.1e9
+			self.f_b = 5.15625e9
+	@property
+	def thru(self):
+		return self.__thru.copy()
+	
+	def addThru(self,data,frequency,index=(2,1)):	# with 2 port S params or thru, add RL if available
 		if len(data.shape) == 1:
-			self.__thruResponse = {'data':data,'frequency':frequency}
+			self.__thru = {'data':data,'frequency':frequency}
 		elif len(data.shape) == 3:
-			self.__thruResponse = {'data':data[2,1,:],'frequency':frequency}
+			self.__thru = {'data':data[1,0,:],'frequency':frequency}
+			self.__returnLoss.append({'data':data[0,0,:],'frequency':frequency})
 			self.__returnLoss.append({'data':data[1,1,:],'frequency':frequency})
-			self.__returnLoss.append({'data':data[2,2,:],'frequency':frequency})
 	
 	def addRL(self,data,frequency):	# add RL
 		self.__returnLoss.append({'data':data,'frequency':frequency})
 	
-	def addNEXT(self,next,frequency):
-		self.__NEXT.append({'data':next,'frequency':frequency})
+	def addNEXT(self,data,frequency):
+		if len(data.shape) == 1:
+			self.__NEXT.append({'data':data,'frequency':frequency})
+		elif len(data.shape) == 3:
+			self.__NEXT.append({'data':data[1,0,:],'frequency':frequency})
 	
-	def addFEXT(self,fext,frequency):
-		self.__FEXT.append({'data':fext,'frequency':frequency})
+	def addFEXT(self,data,frequency):
+		if len(data.shape) == 1:
+			self.__FEXT.append({'data':data,'frequency':frequency})
+		elif len(data.shape) == 3:
+			self.__FEXT.append({'data':data[1,0,:],'frequency':frequency})
 	
-	def calcFittedAttenuation(self):
-		pass
+	def __calcILD(self):
+		fi = np.linspace(self.f_1, self.f_2, 501)
+		IL = -dB(fInterpolate(self.__thru['data'], self.__thru['frequency'], fi))
+		f_avg = np.sum(fi)/len(fi)
+		IL_avg = np.sum(IL)/len(IL)
+		m_A = sum((fi-f_avg)*(IL-IL_avg)) / sum((fi-f_avg)**2)
+		b_A = IL_avg - m_A*f_avg
+		AdB = -(m_A*self.__thru['frequency'] + b_A)
+		self.__thru['A'] = 10**(AdB/20)
+		self.__thru['A'][self.__thru['frequency'] < self.f_1] = np.nan
+		self.__thru['A'][self.__thru['frequency'] > self.f_2] = np.nan
+		self.__thru['ILD'] = 10**(-(dB(self.thru['data']) - dB(self.thru['A']))/20)
 		
-	def calcInsertionLossDeviation(self):
-		pass
-	
+	def __calcXT(self):
+		# need to interpolate the data if necessary
+		# all PS*XT expressed as mag: use dB to represent
+		# all quantities
+		xtsum = np.zeros(len(self.thru['frequency']))
+		for xt in self.__NEXT:
+			xtsum += 10**(dB(xt['data'])/10)
+		self.PSNEXT = 10**(10*np.log10(xtsum)/20)
+		xtsum = np.zeros(len(self.thru['frequency']))
+		for xt in self.__FEXT:
+			xtsum += 10**(dB(xt['data'])/10)
+		self.PSFEXT = 10**(10*np.log10(xtsum)/20)
+		self.PSXT = 10**(10*np.log10(10**(dB(self.PSNEXT)/10) + 10**(dB(self.PSFEXT)/10))/20)
+		
+	def __calcICR(self):
+		ICRdB = dB(self.thru['data']) - dB(self.PSXT)
+		fi = np.linspace(self.f_a, self.f_b, 501)
+		f_avg = np.sum(fi)/len(fi)
+		#ICRavg = 1/
 	# fitted Attenuation
 	# IL
 	# RL
@@ -860,4 +912,13 @@ class BackplaneEthernetChannel:
 	# ICR
 	
 	def evaluate(self):
-		pass
+		self.__calcILD()
+		self.__calcXT()
+		self.__calcICR()
+		
+def limitMargin(data,limit,dataFormat='dB'):
+	# limitMargin(data,limit,dataFormat='dB')
+	# data: (data,freq) e.g. (x.getSDD(2,1),x.frequency)
+	# limit: SpecLine
+	# returns tuple of (margin, frequency)
+	pass
