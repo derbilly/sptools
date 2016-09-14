@@ -806,7 +806,7 @@ class FrequencyDomainPlot(DataPlot):
 		plt.xlabel('GHz')
 		plt.ylabel(self.dataFormat)
 		plt.title(self.title)
-		plt.legend(self.labelList,fontsize='small',loc=4)
+		plt.legend(self.labelList,fontsize='small')
 		plt.grid(True)
 		
 def calculateLoss(data):

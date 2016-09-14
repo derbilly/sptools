@@ -1,5 +1,5 @@
-classdef SParameters
-    %SPARAM Summary of this class goes here
+classdef SParameters < FrequencyDomainData
+    %SParameters - Base class for S-parameters
     %   Detailed explanation goes here
     
     properties
@@ -18,9 +18,16 @@ classdef SParameters
     methods
         % constructor
         function self = SParameters(touchstoneFile)
+            self@FrequencyDomainData();
+            if ~exist('touchstoneFile')
+                [filename,path] = uigetfile('*.s*p');
+                touchstoneFile = [path,filename];
+            end
             [self.S,self.frequency,self.numPorts,self.portZ] = get_snp(touchstoneFile);
             self.dataFile = touchstoneFile;
-            self.label = regexprep(regexprep(self.dataFile,'\.s[0-9]*p$',''),'_',' ');
+            self.label = regexprep(self.dataFile,'\.s[0-9]*p$','');
+            self.label = regexprep(self.label,'.*\\','');
+            self.label = regexprep(self.label,'_',' ');
         end
         
         % identify
@@ -28,74 +35,49 @@ classdef SParameters
             disp(sprintf('%i port S-Parameter object defined from %g Hz to %g Hz.',self.numPorts,self.frequency(1),self.frequency(end)));
         end
         
-        %         % setters
-        %         %function self = set.S(self,value)
-        %         %    self.S = value;
-        %         %end
-        
-        % getters
-        %         function out = get.frequency(self)
-        %             out = self.frequency;
-        %         end
-        %
-        %         function out = get.S(self)
-        %             out = self.S;
-        %         end
-        %
-        %         function out = get.portZ(self)
-        %             out = self.portZ;
-        %         end
-        %
-        %         function out = get.label(self)
-        %             out = self.label;
-        %         end
-        %
-        %         function out = get.numPorts(self)
-        %             out = self.numPorts;
-        %         end
-        
+       
         % more methods
-        function powersum = checkPassivity(self)
-            % checks for passivity
-            powersum = zeros(length(self.frequency),self.numPorts);
-            for porti = 1:self.numPorts
-                for portj = 1:self.numPorts
-                    powersum(:,portj) = powersum(:,portj) + squeeze(self.S(porti,portj,:).*conj(self.S(porti,portj,:)));
-                end
-            end
-        end
-        
-        
-        function addToPlot(self,varargin)%figure_num,item,index,plotSpec
-            %defaults
-            if length(varargin) < 4
-                plotSpec = '-';
-            else
-                plotSpec = varargin{4};
-            end
-            if length(varargin) < 3
-                index = [1,1];
-            else
-                index = varargin{3};
-            end
-            if length(varargin) < 2
-                item = 'S';
-            else
-                item = varargin{2};
-            end
-            if length(varargin) < 1 || varargin{1} == 0
-                0;
-            else
-                figure(varargin{1});
-            end
-            [~,~,~,OUTM] = legend;
-            hold on;
-            plot(self.frequency*1e-9,squeeze(dB(self.(item)(index(1),index(2),:))),plotSpec);
-            hold off;
-            OUTM{end+1} = [ self.label ' ' item '_{' num2str(index(1)) num2str(index(2)) '}' ];
-            legend(OUTM,'Location','Best');
-        end
-        
+%         function powersum = checkPassivity(self)
+%             % checks for passivity
+%             powersum = zeros(length(self.frequency),self.numPorts);
+%             for porti = 1:self.numPorts
+%                 for portj = 1:self.numPorts
+%                     powersum(:,portj) = powersum(:,portj) + squeeze(self.S(porti,portj,:).*conj(self.S(porti,portj,:)));
+%                 end
+%             end
+%         end
+%         
+%         
+%         function addToPlot(self,varargin)%figure_num,item,index,plotSpec
+%             %defaults
+%             if length(varargin) < 4
+%                 plotSpec = '-';
+%             else
+%                 plotSpec = varargin{4};
+%             end
+%             if length(varargin) < 3
+%                 index = [1,1];
+%             else
+%                 index = varargin{3};
+%             end
+%             if length(varargin) < 2
+%                 item = 'S';
+%             else
+%                 item = varargin{2};
+%             end
+%             if length(varargin) < 1 || varargin{1} == 0
+%                 0;
+%             else
+%                 figure(varargin{1});
+%             end
+%             [~,~,~,OUTM] = legend;
+%             hold on;
+%             plot(self.frequency*1e-9,squeeze(dB(self.(item)(index(1),index(2),:))),plotSpec);
+%             hold off;
+%             OUTM{end+1} = [ self.label ' ' item '_{' num2str(index(1)) num2str(index(2)) '}' ];
+%             legend(OUTM,'Location','Best');
+%         end
+%         
         
         function self = reorderPorts(self,portOrder)
             % check inputs!!!!
@@ -110,8 +92,7 @@ classdef SParameters
                     magnitude0 = squeeze(abs(self.S(n,m,:)));
                     magnitude = interp1(self.frequency,magnitude0,frequencyNew,'pchip');
                     phase0 = squeeze(angle(self.S(n,m,:)));
-                    unwrappedPhase0 = unwrapPhase(phase0);
-                    phase = interp1(self.frequency,unwrappedPhase0,frequencyNew,'pchip');
+                    phase = interp1(self.frequency,unwrap(phase0),frequencyNew,'pchip');
                     Snew(n,m,:) = magnitude.*exp(1i.*phase);
                 end
             end
@@ -119,6 +100,12 @@ classdef SParameters
             self.S = Snew;
         end
         
+        % touchstone exporter
+        
+        % getS elaborate this
+        function out = getS(self,n,m)
+            out  = squeeze(self.S(n,m,:));
+        end
         
     end
     
@@ -272,17 +259,4 @@ else
 end
 end
 
-function angleOut = unwrapPhase(angleIn)
 
-angleOut = zeros(size(angleIn));
-angleOut(1)=angleIn(1);
-m=0;
-for n = 2:length(angleIn)
-    if angleIn(n)-angleIn(n-1) > pi
-        m=m+1;
-    elseif angleIn(n)-angleIn(n-1) < -pi
-        m=m-1;
-    end
-    angleOut(n)=angleIn(n)-m*2*pi;
-end
-end

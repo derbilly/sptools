@@ -1,9 +1,8 @@
-classdef DifferentialSParameters < SParameters
+classdef MixedModeSParameters < SParameters
     %DIFF_SPARAM Summary of this class goes here
     %   Detailed explanation goes here
     
     properties (SetAccess = protected)
-        numDiffPorts
         SMM
     end
     
@@ -16,9 +15,13 @@ classdef DifferentialSParameters < SParameters
     
     methods
         % constructor
-        function self = DifferentialSParameters(touchstoneFile)
+        function self = MixedModeSParameters(touchstoneFile)
+            if ~exist('touchstoneFile')
+                [filename,path] = uigetfile('*.s*p');
+                touchstoneFile = [path,filename];
+            end
+            disp(touchstoneFile)
             self@SParameters(touchstoneFile);
-            self.numDiffPorts = self.numPorts/2;
             self.SMM = mixedmode(self.S,1);
         end
         
@@ -40,6 +43,23 @@ classdef DifferentialSParameters < SParameters
             out = self.SMM(2:2:end,2:2:end,:);
         end
         
+        function out = getSDD(self,n,m)
+            out = squeeze(self.SMM(n,m,:));
+        end
+        function out = getSDC(self,n,m)
+            out = squeeze(self.SMM(n,m,:));
+        end
+        function out = getSCD(self,n,m)
+            out = squeeze(self.SMM(n,m,:));
+        end
+        function out = getSCC(self,n,m)
+            out = squeeze(self.SMM(n,m,:));
+        end
+        function out = getSMM(self,n,m)
+            out = squeeze(self.SMM(n,m,:));
+        end
+        
+        
         % more methods
         function self = reorderPorts(self,portOrder)
             self = reorderPorts@SParameters(self,portOrder);
@@ -50,14 +70,6 @@ classdef DifferentialSParameters < SParameters
             self = resampleFrequency@SParameters(self,newFrequency);
             self.SMM = mixedmode(self.S,1);
         end
-        
-        function addToPlot(self,figure_num,item,index,plotSpec)
-            addToPlot@SParameters(self,figure_num,item,index,plotSpec);
-        end
-        
-        
-        
-        
         
     end
     
@@ -107,8 +119,9 @@ function SMM = mixedmode(S,form)
 
     N = size(S,1)/2;
     k = size(S,3);
-
-    if form==1
+    if N==1
+        M = [1,-1;1,1]/sqrt(2);
+    elseif form==1
         M0 = [1,0,-1;1,0,1]/sqrt(2);
         M = zeros(2*N);
         for ni = 1:2:N,     
