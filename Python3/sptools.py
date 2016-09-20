@@ -142,6 +142,19 @@ class SParameters(FrequencyDomainData):
 	# more functions
 	def copy(self):
 		return copy.deepcopy(self)
+	
+	def plotAll(self,matrix='S'):
+		plt.figure(figsize=(12,10))
+		N = getattr(self,matrix).shape[0]
+		for n in range(N):
+			for m in range(N):
+				plt.subplot(N,N,(n)*N+m+1)
+				plt.plot(self.frequency*1e-9,dB(getattr(self,matrix)[n,m,:]))
+				plt.xlabel('GHz')
+				plt.ylabel('dB')
+				plt.title(matrix+'('+str(n+1)+','+str(m+1)+')')
+				plt.grid(True)
+		plt.tight_layout(pad=1.0, w_pad=1.0, h_pad=1.0)
 		
 	def reorderPorts(self,portOrder):
 		"""portOrder is iterable of port indices indexed from 1"""

@@ -37,48 +37,6 @@ classdef SParameters < FrequencyDomainData
         
        
         % more methods
-%         function powersum = checkPassivity(self)
-%             % checks for passivity
-%             powersum = zeros(length(self.frequency),self.numPorts);
-%             for porti = 1:self.numPorts
-%                 for portj = 1:self.numPorts
-%                     powersum(:,portj) = powersum(:,portj) + squeeze(self.S(porti,portj,:).*conj(self.S(porti,portj,:)));
-%                 end
-%             end
-%         end
-%         
-%         
-%         function addToPlot(self,varargin)%figure_num,item,index,plotSpec
-%             %defaults
-%             if length(varargin) < 4
-%                 plotSpec = '-';
-%             else
-%                 plotSpec = varargin{4};
-%             end
-%             if length(varargin) < 3
-%                 index = [1,1];
-%             else
-%                 index = varargin{3};
-%             end
-%             if length(varargin) < 2
-%                 item = 'S';
-%             else
-%                 item = varargin{2};
-%             end
-%             if length(varargin) < 1 || varargin{1} == 0
-%                 0;
-%             else
-%                 figure(varargin{1});
-%             end
-%             [~,~,~,OUTM] = legend;
-%             hold on;
-%             plot(self.frequency*1e-9,squeeze(dB(self.(item)(index(1),index(2),:))),plotSpec);
-%             hold off;
-%             OUTM{end+1} = [ self.label ' ' item '_{' num2str(index(1)) num2str(index(2)) '}' ];
-%             legend(OUTM,'Location','Best');
-%         end
-%         
-        
         function self = reorderPorts(self,portOrder)
             % check inputs!!!!
             self.S = self.S(portOrder,portOrder,:);
@@ -98,6 +56,24 @@ classdef SParameters < FrequencyDomainData
             end
             self.frequency = frequencyNew;
             self.S = Snew;
+        end
+        
+        function plotAll(self,matrix)
+            figure()
+            if ~exist('matrix')
+                matrix = 'S';
+            end
+            N = size(self.(matrix),1);
+            for n = 1:N
+                for m = 1:N
+                    subplot(N,N,(n-1)*N+m)
+                    plot(self.frequency.*1e-9,dB(squeeze(self.(matrix)(n,m,:))))
+                    xlabel('GHz')
+                    ylabel('dB')
+                    title(sprintf('%s(%d,%d)',matrix,n,m))
+                    grid on
+                end
+            end
         end
         
         % touchstone exporter
