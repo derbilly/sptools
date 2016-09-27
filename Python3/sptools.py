@@ -775,7 +775,7 @@ class FrequencyDomainPlot(DataPlot):
 			self.plotSpecList.append(lineStyle)
 
 	def generatePlot(self):
-		plt.figure()
+		plt.figure(figsize=(10,7.5))
 		plt.hold(True)
 		try:
 			xlimits = self._xlimits
