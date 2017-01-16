@@ -263,7 +263,6 @@ class SParameters(FrequencyDomainData):
 			self.__S = 10**(networkData1/20.0) * np.exp(1j*2*np.pi/360.0*networkData2)
 	
 	def export(self, dataFile='export', dataFormat='RI', numDigits=12, format='touchstone', frequencyFormat='GHZ'):
-		# remove snp file extension and add a proper one
 		regexp0 = re.compile(r"\.s[0-9]*p$")
 		dataFile = regexp0.sub("",dataFile)
 		dataFile = "{0}.s{1}p".format(dataFile,self.numPorts)
@@ -300,8 +299,22 @@ class SParameters(FrequencyDomainData):
 					fid.write("{0:0.14g} {1:0.14g} ".format(data1[n,m,frequencyIndex],data2[n,m,frequencyIndex]))
 		fid.write("\n")
 		fid.close()
+		
+	def cascade(self, other):
+		"""Cascades the SParameters object with another SParameters object.
+		Assumes port1-->port2, port3-->port4, etc.
+		Returns the cascaded SParameters in a new SParameters object.
+		"""
+		pass
+		
+	def multiply(self, n):
+		"""Cascades the SParameters object with itself n times.
+		Assumes port1-->port2, port3-->port4, etc.
+		Returns the cascaded SParameters in a new SParameters object.
+		"""
+		pass
 
-class MixedModeSParameters(SParameters):		
+class MixedModeSParameters(SParameters):
 	def __init__(self,data):
 		SParameters.__init__(self,data)
 		self.__genSMM()
@@ -527,6 +540,7 @@ class MixedModeSParameters(SParameters):
 		SParameters.resampleFrequency(self,newFrequency)
 		self.__genSMM()
 
+import genspec
 class SpecLine(FrequencyDomainData):
 	def __init__(self,standard,specItem):
 		FrequencyDomainData.__init__(self)
@@ -544,187 +558,51 @@ class SpecLine(FrequencyDomainData):
 				print("Standard: '" + self.standard + "' not implemented.")
 				print("Valid standards:")
 				print ("\t"+'\n\t'.join(self.generatorMethod.keys()))
-				
-		
 	# SpecLine generator methods dictionary
 	generatorMethod = dict()
 	
+	#################################################################################
+	# CEI-28G-VSR
+	# OIF-CEI-03.1
+	generatorMethod['CEI-28G-VSR'] = {
+		'13.3.7 eq. 13-19':genspec.gen_CEI28GVSR_RLd, # 13.3.7 eq.13-19 tables 13-1,13-2,13-4,13-5
+		'13.3.8 eq. 13-20':genspec.gen_CEI28GVSR_RLdc11, # 13.3.8 eq.13-20 tables 13-1,13-2,13-4,13-5
+		'13.3.8 eq. 13-21':genspec.gen_CEI28GVSR_RLdc22, # 13.3.8 eq.13-21 tables 13-1,13-2,13-4,13-5
+		'13.3.9 SCC22':genspec.gen_CEI28GVSR_RLc} # 13.3.9 tables 13-1,13-4
+	
+	#################################################################################
 	# 10GBASE-KR
 	# IEEE 802.3 Annex69B
-	
-	def gen_10GKR_Amax(self):
-		b1 = 2.0e-5
-		b2 = 1.1e-10
-		b3 = 3.2e-20
-		b4 = -1.2e-30
-		f1 = 1.0e9
-		f2 = 6.0e9
-		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
-		dBspecLine = -20*np.log10(np.exp(1))*(b1*np.sqrt(self.frequency) + b2*self.frequency +
-			b3*self.frequency**2 + b4*self.frequency**3)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-	
-	def gen_10GKR_ILmax(self):
-		b1 = 2.0e-5
-		b2 = 1.1e-10
-		b3 = 3.2e-20
-		b4 = -1.2e-30
-		f2 = 6.0e9
-		fmin = 0.05e9
-		fmax = 15.0e9
-		self.frequency = np.linspace(fmin, fmax, int((fmax-fmin)/10e6)+1)
-		dBspecLine = -20*np.log10(np.exp(1))*(b1*np.sqrt(self.frequency) + b2*self.frequency +
-			b3*self.frequency**2 + b4*self.frequency**3) - 0.8 - 2.0e-10*self.frequency
-		dBspecLine[self.frequency>f2] = dBspecLine[self.frequency>f2] - 1e-8*(self.frequency[self.frequency>f2]-f2)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-	
-	def gen_10GKR_ILDmin(self):
-		f1 = 1.0e9
-		f2 = 6.0e9
-		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
-		dBspecLine = -(1.0 + 0.5e-9*self.frequency)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-
-	def gen_10GKR_ILDmax(self):
-		f1 = 1.0e9
-		f2 = 6.0e9
-		self.frequency = np.linspace(f1, f2, int((f2-f1)/10e6)+1)
-		dBspecLine = (1.0 + 0.5e-9*self.frequency)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-
-	def gen_10GKR_RLmin(self):
-		f2 = 10312.5e6
-		self.frequency = np.linspace(50e6, f2, int((f2-50e6)/12.5e6)+1)
-		dBspecLine = -(12.0 - 6.75*np.log10(self.frequency/275e6))
-		dBspecLine[self.frequency<275.0e6] = -12
-		dBspecLine[self.frequency>3000.0e6] = -5
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-
-	def gen_10GKR_ICRmin(self):
-		fa = 0.1e9
-		fb = 5.15625e9
-		self.frequency = np.linspace(fa, fb, 501)
-		dBspecLine = 23.3 -  18.7*np.log10(self.frequency/5.0e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-
-
 	generatorMethod['10GBASE-KR'] = {
-	'Amax':gen_10GKR_Amax, # 69B.4.2 Fitted attenuation
-	'ILmax':gen_10GKR_ILmax, # 69B.4.3 Insertion loss
-	'ILDmin':gen_10GKR_ILDmin, # 69B.4.4 Insertion loss deviation
-	'ILDmax':gen_10GKR_ILDmax, # 69B.4.4 Insertion loss deviation
-	'RLmin':gen_10GKR_RLmin, # 69B.4.5 Return loss
-	'ICRmin':gen_10GKR_ICRmin} # 69B.4.6 Crosstalk
-
+		'Amax':genspec.gen_10GKR_Amax, # 69B.4.2 Fitted attenuation
+		'ILmax':genspec.gen_10GKR_ILmax, # 69B.4.3 Insertion loss
+		'ILDmin':genspec.gen_10GKR_ILDmin, # 69B.4.4 Insertion loss deviation
+		'ILDmax':genspec.gen_10GKR_ILDmax, # 69B.4.4 Insertion loss deviation
+		'RLmin':genspec.gen_10GKR_RLmin, # 69B.4.5 Return loss
+		'ICRmin':genspec.gen_10GKR_ICRmin} # 69B.4.6 Crosstalk
 	
-	
+	#################################################################################
 	# chip-to-module CAUI4
 	# IEEE 802.3bm
-	def gen_ctmCAUI4_IL(self):
-		self.frequency = np.linspace(10e6,18.75e9,int(18.75e9/10e6))
-		dBspecLine = -(1.076*(-18 + 2*self.frequency/1e9))
-		dBspecLine[self.frequency<14e9] = -(1.076*(0.075 +
-			0.537*np.sqrt(self.frequency[self.frequency<14e9]/1e9) + 
-			0.566*self.frequency[self.frequency<14e9]/1e9))
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-	
-	def gen_ctmCAUI4_RLd(self):
-		self.frequency = np.linspace(10e6,19e9,int(19e9/10e6))
-		dBspecLine = -(4.75-7.4*np.log10(self.frequency/14e9))
-		dBspecLine[self.frequency<8e9] = -(9.5 - 
-			0.37*self.frequency[self.frequency<8e9]/1e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-	
-	def gen_ctmCAUI4_RLdc(self):
-		self.frequency = np.linspace(10e6,19e9,int(19e9/10e6))
-		dBspecLine = -(15-6*self.frequency/25.78e9)
-		dBspecLine[self.frequency<12.89e9] = -(22 - 
-			20*self.frequency[self.frequency<12.89e9]/1e9/25.78)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-	
+	# def genspec.gen_ctmCAUI4_IL(self):
 	generatorMethod['chip-to-module CAUI4'] = {
-		'IL':gen_ctmCAUI4_IL,
-		'RLd':gen_ctmCAUI4_RLd,
-		'RLdc':gen_ctmCAUI4_RLdc}
+		'IL':genspec.gen_ctmCAUI4_IL,
+		'RLd':genspec.gen_ctmCAUI4_RLd,
+		'RLdc':genspec.gen_ctmCAUI4_RLdc}
 
+	#################################################################################
 	# 100GBASE-CR4
 	# IEEE 802.3bj 92.11
 	# Also used for chip-to-module CAUI4
-	def gen_100GCR4_IL_tfref(self): # 92.11.1.2 Test fixture insertion loss
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(-0.00144 + 0.13824*np.sqrt(self.frequency/1e9) + 0.06624*self.frequency/1e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-	
-	def gen_100GCR4_IL_catf(self): # 92.11.2 Cable assembly test fixture
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(-0.00125 + 0.12*np.sqrt(self.frequency/1e9) + 0.0575*self.frequency/1e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-	
-	def gen_100GCR4_IL_MTFmax(self): # 92.11.3 Mated test fixtures
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(-4.25 + 0.66*self.frequency/1e9)
-		dBspecLine[self.frequency<14e9] = -(0.12 +
-			0.475*np.sqrt(self.frequency[self.frequency<14e9]/1e9) + 
-			0.221*self.frequency[self.frequency<14e9]/1e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-	
-	def gen_100GCR4_IL_MTFmin(self): # 92.11.3 Mated test fixtures
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(0.0656*np.sqrt(self.frequency/1e9) + 0.164*self.frequency/1e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-	
-	def gen_100GCR4_RLd_MTF(self): # 92.11.3 Mated test fixtures
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(18 - 0.5*self.frequency/1e9)
-		dBspecLine[self.frequency<4e9] = -(20 -
-			1*self.frequency[self.frequency<4e9]/1e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-	
-	def gen_100GCR4_ILdc_MTF(self): # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(30 - 29/22*self.frequency/1e9)
-		dBspecLine[self.frequency>=16.5e9] = -8.25
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'min'
-	
-	def gen_100GCR4_RLc_MTF(self): # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(12 - 9*self.frequency/1e9)
-		dBspecLine[self.frequency>=1e9] = -3
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-
-	def gen_100GCR4_RLdc_MTF(self): # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
-		self.frequency = np.linspace(10e6,25e9,int(25e9/10e6))
-		dBspecLine = -(18 - 6/25.78*self.frequency/1e9)
-		dBspecLine[self.frequency<12.89e9] = -(30 -
-			30/25.78*self.frequency[self.frequency<12.89e9]/1e9)
-		self.specLine = 10**(dBspecLine/20)
-		self.limitType = 'max'
-	
 	generatorMethod['100GBASE-CR4'] = {
-		'IL_tfref':gen_100GCR4_IL_tfref, # 92.11.1.2 Test fixture insertion loss
-		'IL_catf':gen_100GCR4_IL_catf, # 92.11.2 Cable assembly test fixture
-		'IL_MTFmax':gen_100GCR4_IL_MTFmax, # 92.11.3 Mated test fixtures
-		'IL_MTFmin':gen_100GCR4_IL_MTFmin, # 92.11.3 Mated test fixtures
-		'RLd_MTF':gen_100GCR4_RLd_MTF, # 92.11.3 Mated test fixtures
-		'ILdc_MTF':gen_100GCR4_ILdc_MTF, # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
-		'RLc_MTF':gen_100GCR4_RLc_MTF, # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
-		'RLdc_MTF':gen_100GCR4_RLdc_MTF} # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
+		'IL_tfref':genspec.gen_100GCR4_IL_tfref, # 92.11.1.2 Test fixture insertion loss
+		'IL_catf':genspec.gen_100GCR4_IL_catf, # 92.11.2 Cable assembly test fixture
+		'IL_MTFmax':genspec.gen_100GCR4_IL_MTFmax, # 92.11.3 Mated test fixtures
+		'IL_MTFmin':genspec.gen_100GCR4_IL_MTFmin, # 92.11.3 Mated test fixtures
+		'RLd_MTF':genspec.gen_100GCR4_RLd_MTF, # 92.11.3 Mated test fixtures
+		'ILdc_MTF':genspec.gen_100GCR4_ILdc_MTF, # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
+		'RLc_MTF':genspec.gen_100GCR4_RLc_MTF, # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
+		'RLdc_MTF':genspec.gen_100GCR4_RLdc_MTF} # 92.11.3.3 Mated test fixtures common-mode conversion insertion loss
 
 class DataPlot:
 	def __init__(self):
@@ -735,7 +613,7 @@ class DataPlot:
 	
 	def ylim(self,low=None,high=None):
 		self._ylimits = (low,high)
-	
+
 class FrequencyDomainPlot(DataPlot):
 	# data format: dB, magnitude, phase, degrees
 	# xlimits
@@ -803,6 +681,10 @@ class FrequencyDomainPlot(DataPlot):
 				plt.plot(self._frequencyList[n][np.logical_and(self._frequencyList[n]>=xlow, self._frequencyList[n]<=xhigh)]*1e-9,
 					180/np.pi*np.angle(self._dataList[n][np.logical_and(self._frequencyList[n]>=xlow, self._frequencyList[n]<=xhigh)]),
 					self.plotSpecList[n])
+			elif self.dataFormat == 'unwrapped':
+				plt.plot(self._frequencyList[n][np.logical_and(self._frequencyList[n]>=xlow, self._frequencyList[n]<=xhigh)]*1e-9,
+					180/np.pi*np.unwrap(np.angle(self._dataList[n][np.logical_and(self._frequencyList[n]>=xlow, self._frequencyList[n]<=xhigh)])),
+					self.plotSpecList[n])
 			elif self.dataFormat == 'magnitude':
 				plt.plot(self._frequencyList[n][np.logical_and(self._frequencyList[n]>=xlow, self._frequencyList[n]<=xhigh)]*1e-9,
 					np.abs(self._dataList[n][np.logical_and(self._frequencyList[n]>=xlow, self._frequencyList[n]<=xhigh)]),
@@ -819,9 +701,9 @@ class FrequencyDomainPlot(DataPlot):
 		plt.xlabel('GHz')
 		plt.ylabel(self.dataFormat)
 		plt.title(self.title)
-		plt.legend(self.labelList,fontsize='small')
+		plt.legend(self.labelList,fontsize='small',loc=5)
 		plt.grid(True)
-		
+
 def calculateLoss(data):
 	(numPorts,_,numFrequencyPoints)=data.shape
 	loss = np.ones((numPorts,numFrequencyPoints))
@@ -833,6 +715,9 @@ def calculateLoss(data):
 	return np.sqrt(power)
 
 def fInterpolate(data,f,fnew):
+	"""Interpolates complex-valued data over fnew using magnitude and phase interpolation.
+	Returns the interpolated data.
+	"""
 	magnitude = np.abs(data)
 	phase = np.unwrap(np.angle(data))
 	newMagnitude = interpolate.pchip_interpolate(f,magnitude,fnew)
@@ -928,10 +813,24 @@ class BackplaneEthernetChannel:
 		self.__calcILD()
 		self.__calcXT()
 		self.__calcICR()
-		
+
 def limitMargin(data,limit,dataFormat='dB'):
-	# limitMargin(data,limit,dataFormat='dB')
-	# data: (data,freq) e.g. (x.getSDD(2,1),x.frequency)
-	# limit: SpecLine
-	# returns tuple of (margin, frequency)
-	pass
+	"""Evaluates the margin to limit and returns the minimum margin or maximum
+	violation and the frequency at which it occurs.
+	
+	limitMargin(data,limit,dataFormat='dB')
+	
+	Arguments:
+	data -- (data,freq) e.g. (x.getSDD(2,1),x.frequency)
+	limit -- SpecLine object
+	dataFormat -- how to represent margin (default='dB')
+	
+	returns tuple of (margin, frequency)
+	"""
+	freq = data[1]
+	
+	# interpolate the values
+	# truncate data frequency to spec range
+	# find difference
+	# evaluate margin , frequency (use lowest)
+	#
